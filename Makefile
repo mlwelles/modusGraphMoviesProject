@@ -6,7 +6,7 @@ DGRAPH_GRPC  ?= localhost:9080
 AUTO_INSTALL ?= false
 
 .PHONY: help setup reset generate build test check docker-up docker-down \
-        deps deps-go deps-docker deps-patched-mods \
+        deps deps-go deps-docker \
         fetch-data load-data drop-data dgraph-ready ensure-data
 
 .DEFAULT_GOAL := help
@@ -50,7 +50,7 @@ docker-down: ## Stop Dgraph containers
 		docker compose down; \
 	fi
 
-deps: deps-go deps-docker deps-patched-mods ## Check all dependencies (tools + fork repos)
+deps: deps-go deps-docker ## Check all dependencies
 
 # =============================================================================
 # Internal targets
@@ -137,66 +137,6 @@ deps-docker:
 		echo "Error: 'docker compose' command not available. Please ensure Docker Compose v2 is installed."; \
 		exit 1; \
 	fi
-
-deps-patched-mods: ## Check patched fork repos exist at replace paths
-	@echo "Checking patched module forks …"
-	@check_fork() { \
-		local path="$$1" url="$$2" branch="$$3" name="$$4"; \
-		echo "  $$name: checking $$path …"; \
-		if [ ! -d "$$path" ]; then \
-			if [ "$(AUTO_INSTALL)" = "true" ]; then \
-				echo "    $$path not found — cloning from $$url …"; \
-				git clone "$$url" "$$path"; \
-				echo "    switching to branch $$branch …"; \
-				git -C "$$path" checkout "$$branch"; \
-				echo "    $$name: cloned and on branch $$branch"; \
-				return 0; \
-			else \
-				echo "    Error: $$path does not exist."; \
-				echo "    Clone it: git clone $$url $$path"; \
-				echo "    Or re-run with AUTO_INSTALL=true"; \
-				return 1; \
-			fi; \
-		fi; \
-		if [ ! -d "$$path/.git" ]; then \
-			echo "    Error: $$path exists but is not a git repository."; \
-			return 1; \
-		fi; \
-		local actual_url; \
-		actual_url=$$(git -C "$$path" remote get-url origin 2>/dev/null || echo ""); \
-		if [ "$$actual_url" != "$$url" ]; then \
-			echo "    Warning: origin remote is $$actual_url"; \
-			echo "    Expected: $$url"; \
-			echo "    This may be the upstream repo instead of the fork."; \
-			if [ "$(AUTO_INSTALL)" = "true" ]; then \
-				echo "    Setting origin to fork URL …"; \
-				git -C "$$path" remote set-url origin "$$url"; \
-				echo "    Fetching from fork …"; \
-				git -C "$$path" fetch origin; \
-			else \
-				echo "    Fix with: git -C $$path remote set-url origin $$url"; \
-				return 1; \
-			fi; \
-		fi; \
-		local actual_branch; \
-		actual_branch=$$(git -C "$$path" branch --show-current 2>/dev/null || echo ""); \
-		if [ "$$actual_branch" != "$$branch" ]; then \
-			echo "    Warning: on branch '$$actual_branch', expected '$$branch'"; \
-			if [ "$(AUTO_INSTALL)" = "true" ]; then \
-				echo "    Fetching and switching to $$branch …"; \
-				git -C "$$path" fetch origin "$$branch"; \
-				git -C "$$path" checkout "$$branch"; \
-			else \
-				echo "    Fix with: git -C $$path checkout $$branch"; \
-				return 1; \
-			fi; \
-		fi; \
-		echo "    $$name: OK ($$path on branch $$actual_branch)"; \
-	}; \
-	check_fork "../dgman"         "https://github.com/mlwelles/dgman.git"         "master" "dgman" && \
-	check_fork "../modusGraph"    "https://github.com/mlwelles/modusGraph.git"    "main"   "modusGraph" && \
-	check_fork "../modusGraphGen" "https://github.com/mlwelles/modusGraphGen.git" "master" "modusGraphGen" && \
-	echo "All patched module forks OK."
 
 dgraph-ready: docker-up
 	@timeout=60; while ! curl -s $(DGRAPH_ALPHA)/health | grep -q '"status":"healthy"'; do \

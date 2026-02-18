@@ -2,7 +2,7 @@
 
 Reference project demonstrating struct-first code generation for
 [Dgraph](https://dgraph.io) using
-[modusgraph](https://github.com/matthewmcneely/modusgraph) and
+[modusgraph](https://github.com/mlwelles/modusGraph) (fork) and
 [modusGraphGen](https://github.com/mlwelles/modusGraphGen).
 
 Hand-written Go structs with `json` and `dgraph` tags are the single source of
@@ -36,11 +36,10 @@ integration tests against it.
 ## Quick Start
 
 ```sh
-# 1. Clone all four repos side-by-side
-git clone https://github.com/mlwelles/dgman.git
-git clone https://github.com/mlwelles/modusGraph.git
-git clone https://github.com/mlwelles/modusGraphGen.git
+# 1. Clone the project
 git clone https://github.com/mlwelles/modusGraphMoviesProject.git
+# All fork dependencies (dgman, modusGraph, modusGraphGen) are fetched
+# automatically via go.mod replace directives
 
 # 2. Full setup: check deps, start Dgraph, load the 1M movie dataset
 cd modusGraphMoviesProject
@@ -69,20 +68,18 @@ AUTO_INSTALL=true make setup
 
 ## Repository Architecture
 
-This project is part of a four-repo system. All four are cloned side-by-side
-and linked via `replace` directives in `go.mod` during development:
+This project is part of a four-repo system. All fork dependencies are resolved
+from GitHub via `replace` directives in `go.mod` — no sibling repos need to be
+cloned:
 
-| Repo | Role |
-|------|------|
-| [`mlwelles/dgman`](https://github.com/mlwelles/dgman) | Fork of `dolan-in/dgman`: fixes `predicate=` tag in write, read, and upsert paths |
-| [`mlwelles/modusGraph`](https://github.com/mlwelles/modusGraph) | Fork of `matthewmcneely/modusgraph`: adds `[]T` value-slice support |
-| [`mlwelles/modusGraphGen`](https://github.com/mlwelles/modusGraphGen) | Code generator: struct tags → typed client + Kong CLI |
-| [`mlwelles/modusGraphMoviesProject`](https://github.com/mlwelles/modusGraphMoviesProject) | **This repo**: reference project with structs, tests, and data loading |
+| Repo | Role | Resolution |
+|------|------|------------|
+| [`mlwelles/dgman`](https://github.com/mlwelles/dgman) | Fork of `dolan-in/dgman`: fixes `predicate=` tag in write, read, and upsert paths | `go.mod` replace → GitHub |
+| [`mlwelles/modusGraph`](https://github.com/mlwelles/modusGraph) | Fork of `matthewmcneely/modusgraph`: adds `[]T` value-slice support | `go.mod` replace → GitHub |
+| [`mlwelles/modusGraphGen`](https://github.com/mlwelles/modusGraphGen) | Code generator: struct tags → typed client + Kong CLI | `go.mod` replace → GitHub |
+| [`mlwelles/modusGraphMoviesProject`](https://github.com/mlwelles/modusGraphMoviesProject) | **This repo**: reference project with structs, tests, and data loading | — |
 
 ```
-../dgman/            Fork of dgman (predicate= fixes)
-../modusGraph/       Fork of modusgraph ([]T slice support)
-../modusGraphGen/    Code generator
 modusGraphMoviesProject/   <-- you are here
   movies/
     film.go, director.go, ...   Hand-written structs (source of truth)
@@ -578,7 +575,7 @@ make test          Run integration tests (self-healing: bootstraps Dgraph if nee
 make check         Run go vet on all packages
 make docker-up     Start Dgraph containers
 make docker-down   Stop Dgraph containers
-make deps          Check all dependencies (Go, Docker, fork repos)
+make deps          Check all dependencies (Go, Docker)
 ```
 
 ### Environment Variables
@@ -587,7 +584,7 @@ make deps          Check all dependencies (Go, Docker, fork repos)
 |----------|---------|-------------|
 | `DGRAPH_ALPHA` | `http://localhost:8080` | Dgraph Alpha HTTP endpoint |
 | `DGRAPH_GRPC` | `localhost:9080` | Dgraph gRPC endpoint |
-| `AUTO_INSTALL` | `false` | Set to `true` to auto-install missing deps (Go, Docker, fork repos) |
+| `AUTO_INSTALL` | `false` | Set to `true` to auto-install missing deps (Go, Docker) |
 
 ### Docker Services
 
