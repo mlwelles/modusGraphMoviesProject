@@ -497,6 +497,207 @@ func TestMutationRoundTrip(t *testing.T) {
 	t.Log("Mutation round-trip passed: Add -> Get -> Update -> Get -> Search -> Delete -> Verify")
 }
 
+// --- Reverse relationship tests ---
+
+// TestGenreReverseEdge verifies that querying a Genre via Get returns
+// films linked through the ~genre reverse edge.
+func TestGenreReverseEdge(t *testing.T) {
+	skipIfNoDgraph(t)
+	c := newTestClient(t)
+	seedData(t, c)
+	ctx := context.Background()
+
+	// Find the "Action" genre
+	genres, err := c.Genre.Search(ctx, "Action")
+	if err != nil {
+		t.Fatalf("Genre.Search: %v", err)
+	}
+	if len(genres) == 0 {
+		t.Fatal("expected to find Action genre")
+	}
+
+	// Get the full genre by UID — should include reverse Films edge
+	action, err := c.Genre.Get(ctx, genres[0].UID)
+	if err != nil {
+		t.Fatalf("Genre.Get: %v", err)
+	}
+	t.Logf("Genre: %s (uid=%s), reverse films: %d", action.Name, action.UID, len(action.Films))
+	for _, f := range action.Films {
+		t.Logf("  ~genre Film: %s (uid=%s)", f.Name, f.UID)
+	}
+
+	// Seed data has Action genre on: Matrix, Matrix Reloaded, Star Wars IV, Star Wars V
+	if len(action.Films) < 4 {
+		t.Fatalf("expected at least 4 films in Action genre via reverse edge, got %d", len(action.Films))
+	}
+}
+
+// TestCountryReverseEdge verifies the ~country reverse edge by creating
+// a film with a country and checking the country's reverse Films field.
+func TestCountryReverseEdge(t *testing.T) {
+	skipIfNoDgraph(t)
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	// Create a country
+	usa := &movies.Country{Name: "United States"}
+	if err := c.Country.Add(ctx, usa); err != nil {
+		t.Fatalf("Country.Add: %v", err)
+	}
+	t.Logf("Created country: %s (uid=%s)", usa.Name, usa.UID)
+
+	// Create a film with that country on the forward edge
+	film := &movies.Film{
+		Name:               "Reverse Edge Test Film",
+		InitialReleaseDate: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Countries:          []movies.Country{*usa},
+	}
+	if err := c.Film.Add(ctx, film); err != nil {
+		t.Fatalf("Film.Add: %v", err)
+	}
+	t.Logf("Created film: %s (uid=%s) with country %s", film.Name, film.UID, usa.UID)
+
+	// Get the country and check the reverse edge
+	gotCountry, err := c.Country.Get(ctx, usa.UID)
+	if err != nil {
+		t.Fatalf("Country.Get: %v", err)
+	}
+	t.Logf("Country: %s, reverse films: %d", gotCountry.Name, len(gotCountry.Films))
+	for _, f := range gotCountry.Films {
+		t.Logf("  ~country Film: %s (uid=%s)", f.Name, f.UID)
+	}
+
+	found := false
+	for _, f := range gotCountry.Films {
+		if f.UID == film.UID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected film %s to appear in country's reverse Films edge", film.UID)
+	}
+
+	// Cleanup
+	_ = c.Film.Delete(ctx, film.UID)
+	_ = c.Country.Delete(ctx, usa.UID)
+}
+
+// TestForwardEdgeUpdateReflectsInReverse verifies that when a forward edge
+// is updated on a Film, the change is immediately visible through the
+// reverse edge on the target entity.
+func TestForwardEdgeUpdateReflectsInReverse(t *testing.T) {
+	skipIfNoDgraph(t)
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	// Create two genres
+	comedy := &movies.Genre{Name: "Comedy Test"}
+	thriller := &movies.Genre{Name: "Thriller Test"}
+	if err := c.Genre.Add(ctx, comedy); err != nil {
+		t.Fatalf("Genre.Add Comedy: %v", err)
+	}
+	if err := c.Genre.Add(ctx, thriller); err != nil {
+		t.Fatalf("Genre.Add Thriller: %v", err)
+	}
+	t.Logf("Created genres: Comedy=%s, Thriller=%s", comedy.UID, thriller.UID)
+
+	// Create a film with only Comedy genre initially
+	film := &movies.Film{
+		Name:               "Forward-Reverse Update Test",
+		InitialReleaseDate: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC),
+		Genres:             []movies.Genre{*comedy},
+	}
+	if err := c.Film.Add(ctx, film); err != nil {
+		t.Fatalf("Film.Add: %v", err)
+	}
+	t.Logf("Created film: %s (uid=%s) with Comedy genre", film.Name, film.UID)
+
+	// Verify Comedy shows the film in its reverse edge
+	gotComedy, err := c.Genre.Get(ctx, comedy.UID)
+	if err != nil {
+		t.Fatalf("Genre.Get Comedy: %v", err)
+	}
+	comedyHasFilm := false
+	for _, f := range gotComedy.Films {
+		if f.UID == film.UID {
+			comedyHasFilm = true
+		}
+	}
+	if !comedyHasFilm {
+		t.Fatalf("expected film in Comedy's reverse edge before update, got %d films", len(gotComedy.Films))
+	}
+	t.Logf("Before update: Comedy has %d film(s) including our test film", len(gotComedy.Films))
+
+	// Verify Thriller does NOT yet show the film
+	gotThriller, err := c.Genre.Get(ctx, thriller.UID)
+	if err != nil {
+		t.Fatalf("Genre.Get Thriller: %v", err)
+	}
+	for _, f := range gotThriller.Films {
+		if f.UID == film.UID {
+			t.Fatal("film should NOT be in Thriller's reverse edge before update")
+		}
+	}
+	t.Logf("Before update: Thriller has %d film(s), none is our test film", len(gotThriller.Films))
+
+	// --- Update the film: add Thriller as a second genre ---
+	film.Genres = []movies.Genre{*comedy, *thriller}
+	if err := c.Film.Update(ctx, film); err != nil {
+		t.Fatalf("Film.Update: %v", err)
+	}
+	t.Log("Updated film to include both Comedy and Thriller genres")
+
+	// Verify the film's forward edge now includes both genres
+	gotFilm, err := c.Film.Get(ctx, film.UID)
+	if err != nil {
+		t.Fatalf("Film.Get after update: %v", err)
+	}
+	if len(gotFilm.Genres) < 2 {
+		t.Fatalf("expected at least 2 genres on film after update, got %d", len(gotFilm.Genres))
+	}
+	t.Logf("Film after update has %d genres", len(gotFilm.Genres))
+
+	// Verify Thriller NOW shows the film in its reverse edge
+	gotThriller2, err := c.Genre.Get(ctx, thriller.UID)
+	if err != nil {
+		t.Fatalf("Genre.Get Thriller after update: %v", err)
+	}
+	thrillerHasFilm := false
+	for _, f := range gotThriller2.Films {
+		if f.UID == film.UID {
+			thrillerHasFilm = true
+		}
+	}
+	if !thrillerHasFilm {
+		t.Fatalf("expected film in Thriller's reverse edge after update, got %d films: %+v",
+			len(gotThriller2.Films), gotThriller2.Films)
+	}
+	t.Logf("After update: Thriller now has %d film(s) including our test film", len(gotThriller2.Films))
+
+	// Comedy should still have the film
+	gotComedy2, err := c.Genre.Get(ctx, comedy.UID)
+	if err != nil {
+		t.Fatalf("Genre.Get Comedy after update: %v", err)
+	}
+	comedyStillHasFilm := false
+	for _, f := range gotComedy2.Films {
+		if f.UID == film.UID {
+			comedyStillHasFilm = true
+		}
+	}
+	if !comedyStillHasFilm {
+		t.Fatalf("expected film to still be in Comedy's reverse edge after update")
+	}
+	t.Log("After update: Comedy still has the test film")
+
+	// Cleanup
+	_ = c.Film.Delete(ctx, film.UID)
+	_ = c.Genre.Delete(ctx, comedy.UID)
+	_ = c.Genre.Delete(ctx, thriller.UID)
+	t.Log("Forward edge update correctly reflected in reverse edges")
+}
+
 // --- Multi-entity relationship test ---
 
 func TestDirectorWithFilms(t *testing.T) {
