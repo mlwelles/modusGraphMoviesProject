@@ -6,14 +6,20 @@ replace github.com/dolan-in/dgman/v2 => ../dgman
 
 replace github.com/matthewmcneely/modusgraph => ../modusGraph
 
-require github.com/matthewmcneely/modusgraph v0.4.0
+replace github.com/mlwelles/modusGraphGen => ../modusGraphGen
+
+tool github.com/mlwelles/modusGraphGen
+
+require (
+	github.com/alecthomas/kong v1.14.0
+	github.com/matthewmcneely/modusgraph v0.4.0
+)
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2 // indirect
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0 // indirect
 	github.com/IBM/sarama v1.46.3 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
-	github.com/alecthomas/kong v1.14.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/blevesearch/bleve/v2 v2.5.7 // indirect
@@ -93,6 +99,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.98 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c // indirect
+	github.com/mlwelles/modusGraphGen v0.0.0-00010101000000-000000000000 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

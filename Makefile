@@ -32,10 +32,10 @@ generate: ## Run modusGraphGen (client library + CLI)
 	go generate ./movies
 
 build: ## Build the movies CLI binary
-	go build -o bin/movies ./cmd/movies
+	go build -o bin/movies ./movies/cmd/movies
 
 test: ensure-data dgraph-ready ## Run the test suite (self-healing: bootstraps Dgraph if needed)
-	go test ./...
+	DGRAPH_TEST_ADDR=$(DGRAPH_GRPC) go test ./...
 
 check: ## Run go vet on all packages
 	go vet ./...
