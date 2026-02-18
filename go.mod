@@ -13,6 +13,7 @@ require (
 	github.com/HdrHistogram/hdrhistogram-go v1.2.0 // indirect
 	github.com/IBM/sarama v1.46.3 // indirect
 	github.com/agnivade/levenshtein v1.2.1 // indirect
+	github.com/alecthomas/kong v1.14.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/blevesearch/bleve/v2 v2.5.7 // indirect
