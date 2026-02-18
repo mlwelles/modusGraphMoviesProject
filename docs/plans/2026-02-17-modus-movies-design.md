@@ -317,9 +317,16 @@ Single set of structs in `movies/`. Each struct serves both modusgraph (via
 ### Tag conventions
 
 - `json` tag: camelCase, for JSON serialization. Consumer-facing.
-- `dgraph` tag: index directives, type hints, and `predicate=` for predicate mapping.
+- `dgraph` tag: **space-separated** tokens. dgman's `parseStructTag()` regex
+  splits on spaces; commas within `index=` are tokenizer separators
+  (`index=hash,term,trigram,fulltext`), but commas anywhere else become part of
+  the value and cause schema errors.
 - `predicate=` needed when the Dgraph predicate differs from the `json` tag
   (dot-prefixed predicates, singular vs plural, reverse edges).
+- Reverse edges require **both** `predicate=~X` and the `reverse` keyword.
+  Without `reverse`, dgman's `ManagedReverse` flag is not set and the reverse
+  edge is not expanded in queries.
+- Forward edges with reverse indexing use `predicate=X reverse` (no `~` prefix).
 
 ### Struct definitions
 
@@ -331,10 +338,10 @@ type Film struct {
     Name               string           `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
     InitialReleaseDate time.Time        `json:"initialReleaseDate,omitempty" dgraph:"predicate=initial_release_date index=year"`
     Tagline            string           `json:"tagline,omitempty"`
-    Genres             []Genre          `json:"genres,omitempty" dgraph:"predicate=genre,reverse,count"`
-    Countries          []Country        `json:"countries,omitempty" dgraph:"predicate=country,reverse"`
-    Ratings            []Rating         `json:"ratings,omitempty" dgraph:"predicate=rating,reverse"`
-    ContentRatings     []ContentRating  `json:"contentRatings,omitempty" dgraph:"predicate=rated,reverse"`
+    Genres             []Genre          `json:"genres,omitempty" dgraph:"predicate=genre reverse count"`
+    Countries          []Country        `json:"countries,omitempty" dgraph:"predicate=country reverse"`
+    Ratings            []Rating         `json:"ratings,omitempty" dgraph:"predicate=rating reverse"`
+    ContentRatings     []ContentRating  `json:"contentRatings,omitempty" dgraph:"predicate=rated reverse"`
     Starring           []Performance    `json:"starring,omitempty" dgraph:"count"`
 }
 
@@ -343,7 +350,7 @@ type Director struct {
     UID   string   `json:"uid,omitempty"`
     DType []string `json:"dgraph.type,omitempty"`
     Name  string   `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Films []Film   `json:"films,omitempty" dgraph:"predicate=director.film,reverse,count"`
+    Films []Film   `json:"films,omitempty" dgraph:"predicate=director.film reverse count"`
 }
 
 // movies/actor.go
@@ -351,7 +358,7 @@ type Actor struct {
     UID   string        `json:"uid,omitempty"`
     DType []string      `json:"dgraph.type,omitempty"`
     Name  string        `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Films []Performance `json:"films,omitempty" dgraph:"predicate=actor.film,count"`
+    Films []Performance `json:"films,omitempty" dgraph:"predicate=actor.film count"`
 }
 
 // movies/performance.go
@@ -366,7 +373,7 @@ type Genre struct {
     UID   string   `json:"uid,omitempty"`
     DType []string `json:"dgraph.type,omitempty"`
     Name  string   `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Films []Film   `json:"films,omitempty" dgraph:"predicate=~genre"`
+    Films []Film   `json:"films,omitempty" dgraph:"predicate=~genre reverse"`
 }
 
 // movies/country.go
@@ -374,7 +381,7 @@ type Country struct {
     UID   string   `json:"uid,omitempty"`
     DType []string `json:"dgraph.type,omitempty"`
     Name  string   `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Films []Film   `json:"films,omitempty" dgraph:"predicate=~country"`
+    Films []Film   `json:"films,omitempty" dgraph:"predicate=~country reverse"`
 }
 
 // movies/rating.go
@@ -382,7 +389,7 @@ type Rating struct {
     UID   string   `json:"uid,omitempty"`
     DType []string `json:"dgraph.type,omitempty"`
     Name  string   `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Films []Film   `json:"films,omitempty" dgraph:"predicate=~rating"`
+    Films []Film   `json:"films,omitempty" dgraph:"predicate=~rating reverse"`
 }
 
 // movies/content_rating.go
@@ -390,7 +397,7 @@ type ContentRating struct {
     UID   string   `json:"uid,omitempty"`
     DType []string `json:"dgraph.type,omitempty"`
     Name  string   `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Films []Film   `json:"films,omitempty" dgraph:"predicate=~rated"`
+    Films []Film   `json:"films,omitempty" dgraph:"predicate=~rated reverse"`
 }
 
 // movies/location.go
@@ -398,8 +405,8 @@ type Location struct {
     UID   string    `json:"uid,omitempty"`
     DType []string  `json:"dgraph.type,omitempty"`
     Name  string    `json:"name,omitempty" dgraph:"index=hash,term,trigram,fulltext"`
-    Loc   []float64 `json:"loc,omitempty" dgraph:"index=geo,type=geo"`
-    Email string    `json:"email,omitempty" dgraph:"index=exact,upsert"`
+    Loc   []float64 `json:"loc,omitempty" dgraph:"index=geo type=geo"`
+    Email string    `json:"email,omitempty" dgraph:"index=exact upsert"`
 }
 ```
 

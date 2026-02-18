@@ -1,4 +1,5 @@
 .osgrep
+.idea/
 data/
 docker/
 bin/

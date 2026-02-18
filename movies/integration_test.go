@@ -17,9 +17,12 @@ func testAddr() string {
 	return os.Getenv("DGRAPH_TEST_ADDR")
 }
 
-// skipIfNoDgraph skips the test if DGRAPH_TEST_ADDR is not set.
+// skipIfNoDgraph skips the test if DGRAPH_TEST_ADDR is not set or -short is passed.
 func skipIfNoDgraph(t *testing.T) {
 	t.Helper()
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
 	if testAddr() == "" {
 		t.Skip("Skipping: DGRAPH_TEST_ADDR not set")
 	}
