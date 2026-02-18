@@ -1,0 +1,23 @@
+services:
+  dgraph:
+    image: dgraph/standalone:latest
+    container_name: modus-movies-dgraph
+    ports:
+      - "8080:8080"   # HTTP
+      - "9080:9080"   # gRPC (modusgraph connects here)
+    volumes:
+      - ./docker/dgraph:/dgraph
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  ratel:
+    image: dgraph/ratel:latest
+    container_name: modus-movies-ratel
+    ports:
+      - "8000:8000"
+    depends_on:
+      - dgraph

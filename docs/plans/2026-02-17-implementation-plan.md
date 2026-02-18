@@ -174,12 +174,94 @@ replace github.com/mlwelles/modusGraphGen => ../modusGraphGen
 Run `go build ./...` in this project. The generated code from Subagent C
 must compile against the forked dependencies from Subagents A and B.
 
-### Phase 3.3: Docker + data loading
+### Phase 3.3: Docker + data loading + Makefile
 
-1. Create `docker-compose.yml` (Dgraph Zero + Alpha).
-2. Create `tasks/fetch-data.sh` to download `1million.rdf.gz` + schema.
-3. Create `tasks/load-data.go` using `engine.Load()`.
-4. Create `Makefile` with all targets from the design doc.
+Mirror the scaffolding from `../movieql` with two key differences: (1)
+data loading uses modusgraph's `engine.Load()` instead of `dgraph live`,
+and (2) schema management uses `WithAutoSchema(true)` from structs
+instead of a separate GraphQL schema.
+
+#### docker-compose.yml
+
+Use `dgraph/standalone:latest` (single container, simpler than separate
+Zero + Alpha). Use the standard Dgraph ports matching the dgraph-io/tour
+docker-compose.yml. Include Ratel for the query UI:
+
+```yaml
+services:
+  dgraph:
+    image: dgraph/standalone:latest
+    container_name: modus-movies-dgraph
+    ports:
+      - "8080:8080"   # HTTP
+      - "9080:9080"   # gRPC (modusgraph connects here)
+    volumes:
+      - ./docker/dgraph:/dgraph
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  ratel:
+    image: dgraph/ratel:latest
+    container_name: modus-movies-ratel
+    ports:
+      - "8000:8000"
+    depends_on:
+      - dgraph
+```
+
+#### tasks/fetch-data.sh
+
+Same as movieql: download `1million.rdf.gz` + `1million.schema` from
+`dgraph-io/tour` into `data/`. Skip download if files already exist.
+
+#### tasks/load-data.go
+
+Go program using modusgraph's `engine.Load()` to load data via gRPC.
+If `engine.Load()` does not support RDF bulk loading, fall back to
+`dgraph live` via shell exec (like movieql).
+
+```go
+engine.Load(ctx, "data/1million.schema", "data/1million.rdf.gz")
+```
+
+#### tasks/drop-data.sh
+
+Same as movieql: `POST /alter {"drop_all": true}`. Used by `make reset`.
+
+#### Makefile
+
+```makefile
+DGRAPH_ALPHA ?= http://localhost:8080
+DGRAPH_GRPC  ?= localhost:9080
+
+help           ## Show all targets
+setup          ## deps + docker-up + load-data
+reset          ## docker-up + drop-data + load-data
+generate       ## Run modusGraphGen (client library + CLI)
+build          ## Build the movies CLI binary
+test           ## Self-healing: ensure-data + go test
+check          ## go vet
+docker-up      ## Start Dgraph container
+docker-down    ## Stop Dgraph container
+fetch-data     ## Download 1million.rdf.gz + schema
+load-data      ## fetch-data → engine.Load() or dgraph live
+drop-data      ## Drop all data
+deps           ## Check Go + Docker
+```
+
+Self-healing targets (internal):
+
+- `dgraph-ready`: wait for health endpoint
+- `ensure-data`: if film count is 0, run `load-data`
+
+NOT needed (struct-first, no GraphQL schema):
+
+- `apply-schema` (modusgraph uses `WithAutoSchema(true)`)
+- `introspect-schema` (codegen reads Go AST, not Dgraph schema)
 
 ### Phase 3.4: Integration tests
 
