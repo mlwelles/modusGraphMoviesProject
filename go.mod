@@ -2,11 +2,11 @@ module github.com/mlwelles/modusGraphMoviesProject
 
 go 1.26.0
 
-replace github.com/dolan-in/dgman/v2 => ../dgman
+replace github.com/dolan-in/dgman/v2 => github.com/mlwelles/dgman/v2 v2.2.0-preview2.0.20260218050302-2f0c2a95c767
 
-replace github.com/matthewmcneely/modusgraph => ../modusGraph
+replace github.com/matthewmcneely/modusgraph => github.com/mlwelles/modusGraph v0.4.1-0.20260218170250-d05c4d1b9701
 
-replace github.com/mlwelles/modusGraphGen => ../modusGraphGen
+replace github.com/mlwelles/modusGraphGen => github.com/mlwelles/modusGraphGen v1.0.0
 
 tool github.com/mlwelles/modusGraphGen
 
