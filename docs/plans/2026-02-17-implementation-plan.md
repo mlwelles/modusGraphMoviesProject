@@ -9,14 +9,8 @@ everything together.
 ```
 Time ──────────────────────────────────────────────────────►
 
-Subagent A (dgman fork):
-  Phase 2.1  Fork + fix write path
-  Phase 2.2  Fix read path
-  Phase 2.4a dgman tests
-
-Subagent B (modusGraph fork):
-  Phase 2.3  Fork + []T slice support + use forked dgman
-  Phase 2.4b modusGraph tests ([]T immediately; predicate= e2e after A)
+Subagent A: dgman fixes now in upstream v2.2.0 (no fork needed)
+Subagent B: modusgraph used from upstream v0.4.0 (no fork needed)
 
 Subagent C (structs + codegen):
   Phase 1.1  Movie structs in this project
@@ -26,7 +20,7 @@ Subagent C (structs + codegen):
   Phase 1.5  CLI generation
 
 Merge (main agent):
-  Phase 3.1  Wire go.mod replace directives
+  Phase 3.1  Wire go.mod (upstream deps + modusGraphGen replace)
   Phase 3.2  Compile check
   Phase 3.3  Docker + data loading
   Phase 3.4  Integration tests
@@ -35,72 +29,25 @@ Merge (main agent):
 
 ### Dependencies
 
-- Subagent C is fully independent.
-- Subagent B can start immediately. Its `[]T` work and tests are
-  independent of A. The `predicate=` end-to-end tests require A's fixes
-  in `../dgman` (via `replace` directive).
-- The merge phase requires all three subagents to complete.
+- Subagents A and B are no longer needed — upstream repos include all fixes.
+- The merge phase requires Subagent C to complete.
 
 ---
 
-## Subagent A: dgman Fork
+## Subagent A: dgman Fixes (Now Upstream)
 
-### Phase 2.1: Fork and fix write path
+The `predicate=` fixes originally planned for a fork have been merged into
+mainline `dolan-in/dgman` v2.2.0. No fork is needed. This project uses
+`dolan-in/dgman/v2 v2.2.0` (resolved transitively via modusgraph, upgraded
+via explicit `require` in `go.mod`).
 
-1. Fork `dolan-in/dgman` to `mlwelles/dgman`.
-2. Clone to `../dgman`.
-3. Fix `filterStruct` in `mutate.go` (around line 231):
-   - When `typeCache` has schema info for the struct, use
-     `mutateType.schema[i].Predicate` as the map key instead of
-     `field.Tag.Get("json")`.
-   - Fall back to the json tag for non-dgraph structs (e.g.,
-     `time.Time`).
-   - Use `schema.OmitEmpty` instead of re-parsing json tag options.
+## Subagent B: modusgraph (Upstream)
 
-### Phase 2.2: Fix read path
-
-1. Fix query deserialization in `query.go` (around lines 514, 542).
-2. Before `json.Unmarshal`, remap JSON keys from predicate names to json
-   tag names.
-3. Build the `predicate→jsonTag` mapping from the struct's parsed schema
-   (already available in `parseDgraphTag`).
-4. Apply recursively for nested edge structs.
-
-### Phase 2.4a: dgman fork tests
-
-All tests use structs where `predicate=` differs from the `json` tag.
-
-| Test                         | Description                                  |
-|------------------------------|----------------------------------------------|
-| MutateBasic round-trip       | Insert, get back, assert field not zero       |
-| Mutate/Upsert round-trip    | Same via `do()` path, confirms read fix       |
-| Dot-prefixed predicates      | `director.film` round-trips through insert/get|
-| Query filter by predicate    | Insert films, filter `ge(release_date, ...)`, assert results |
-
----
-
-## Subagent B: modusGraph Fork
-
-### Phase 2.3: Fork and modify modusgraph
-
-1. Fork `matthewmcneely/modusgraph` to `mlwelles/modusGraph`.
-2. Clone to `../modusGraph`.
-3. Update `go.mod` to point to `mlwelles/dgman` (via `replace` directive
-   during development). This pulls in both dgman fixes with zero code
-   changes in modusgraph.
-4. Add `[]T` value-type slice support: make dgman's reflection handle
-   `[]Genre` the same way it handles `[]*Genre`. Populate and append by
-   value instead of by pointer.
-
-### Phase 2.4b: modusGraph fork tests
-
-| Test                         | Depends on A? | Description                          |
-|------------------------------|:---:|----------------------------------------------|
-| `[]T` slice round-trip       | No  | Insert `[]Genre`, query back, assert populated. Compare with `[]*Genre`. |
-| `predicate=` e2e (Insert)    | Yes | Insert through modusgraph client API, get back, assert correct. |
-| `predicate=` e2e (Update)    | Yes | Update, Upsert, Get, Query with predicate= structs. |
-| `predicate=` e2e (file://)   | Yes | Same tests on `file://` backend.            |
-| `predicate=` e2e (dgraph://) | Yes | Same tests on `dgraph://` backend.          |
+The mainline `matthewmcneely/modusgraph` v0.4.0 already supports `[]T`
+value-type slices and uses dgman as a dependency. By requiring dgman v2.2.0
+explicitly in this project's `go.mod`, Go's Minimum Version Selection
+upgrades the transitive dependency to include the `predicate=` fixes.
+No fork is needed.
 
 ---
 
@@ -161,12 +108,15 @@ Build `text/template` templates for each generated file:
 
 ### Phase 3.1: Wire go.mod
 
-Ensure `go.mod` in this project has all three `replace` directives:
+Ensure `go.mod` in this project uses upstream dependencies:
 
 ```
-replace github.com/dolan-in/dgman/v2 => ../dgman
-replace github.com/matthewmcneely/modusgraph => ../modusGraph
-replace github.com/mlwelles/modusGraphGen => ../modusGraphGen
+replace github.com/mlwelles/modusGraphGen => github.com/mlwelles/modusGraphGen v1.0.0
+
+require (
+    github.com/matthewmcneely/modusgraph v0.4.0
+    github.com/dolan-in/dgman/v2 v2.2.0  // upgraded from modusgraph's v2.2.0-preview2
+)
 ```
 
 ### Phase 3.2: Compile check

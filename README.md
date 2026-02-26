@@ -2,7 +2,7 @@
 
 Reference project demonstrating struct-first code generation for
 [Dgraph](https://dgraph.io) using
-[modusgraph](https://github.com/mlwelles/modusGraph) (fork) and
+[modusgraph](https://github.com/matthewmcneely/modusgraph) and
 [modusGraphGen](https://github.com/mlwelles/modusGraphGen).
 
 Hand-written Go structs with `json` and `dgraph` tags are the single source of
@@ -38,8 +38,8 @@ integration tests against it.
 ```sh
 # 1. Clone the project
 git clone https://github.com/mlwelles/modusGraphMoviesProject.git
-# All fork dependencies (dgman, modusGraph, modusGraphGen) are fetched
-# automatically via go.mod replace directives
+# Dependencies (modusgraph, dgman, modusGraphGen) are fetched
+# automatically via go.mod
 
 # 2. Full setup: check deps, start Dgraph, load the 1M movie dataset
 cd modusGraphMoviesProject
@@ -68,16 +68,15 @@ AUTO_INSTALL=true make setup
 
 ## Repository Architecture
 
-This project is part of a four-repo system. All fork dependencies are resolved
-from GitHub via `replace` directives in `go.mod` — no sibling repos need to be
-cloned:
+This project depends on the following upstream libraries, all resolved
+automatically via `go.mod`:
 
-| Repo | Role | Resolution |
-|------|------|------------|
-| [`mlwelles/dgman`](https://github.com/mlwelles/dgman) | Fork of `dolan-in/dgman`: fixes `predicate=` tag in write, read, and upsert paths | `go.mod` replace → GitHub |
-| [`mlwelles/modusGraph`](https://github.com/mlwelles/modusGraph) | Fork of `matthewmcneely/modusgraph`: adds `[]T` value-slice support | `go.mod` replace → GitHub |
-| [`mlwelles/modusGraphGen`](https://github.com/mlwelles/modusGraphGen) | Code generator: struct tags → typed client + Kong CLI | `go.mod` replace → GitHub |
-| [`mlwelles/modusGraphMoviesProject`](https://github.com/mlwelles/modusGraphMoviesProject) | **This repo**: reference project with structs, tests, and data loading | — |
+| Repo | Role |
+|------|------|
+| [`matthewmcneely/modusgraph`](https://github.com/matthewmcneely/modusgraph) | Dgraph client library with struct-based schema management |
+| [`dolan-in/dgman`](https://github.com/dolan-in/dgman) | Dgraph schema manager (transitive dep of modusgraph) |
+| [`mlwelles/modusGraphGen`](https://github.com/mlwelles/modusGraphGen) | Code generator: struct tags → typed client + Kong CLI |
+| [`mlwelles/modusGraphMoviesProject`](https://github.com/mlwelles/modusGraphMoviesProject) | **This repo**: reference project with structs, tests, and data loading |
 
 ```
 modusGraphMoviesProject/   <-- you are here

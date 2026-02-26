@@ -20,17 +20,15 @@ underlying Dgraph benchmark dataset but are otherwise independent.
 
 ## Repositories
 
-Four repos, each with a single responsibility:
-
 | Repo                                | Role                                        |
 |-------------------------------------|---------------------------------------------|
-| `mlwelles/dgman`                    | Fork: fix `predicate=` in write + read paths |
-| `mlwelles/modusGraph`               | Fork: `[]T` slice support, use forked dgman  |
+| `matthewmcneely/modusgraph`        | Dgraph client library with struct-based schema management |
+| `dolan-in/dgman`                    | Dgraph schema manager (transitive dep; v2.2.0 includes `predicate=` fixes) |
 | `mlwelles/modusGraphGen`           | Codegen: struct → typed client + Kong CLI    |
 | `mlwelles/modusGraphMoviesProject`| Reference project: structs + tests           |
 
-All four are cloned side-by-side under `../` and linked via `replace` directives
-during development.
+`modusgraph` and `dgman` are used directly from their upstream repos.
+`modusGraphGen` is pinned via a `replace` directive in `go.mod`.
 
 ## Architecture
 
@@ -68,11 +66,11 @@ Dgraph cluster (Docker)        Data: 1million.rdf.gz loaded via engine.Load()
 | Data loading          | RDF via `engine.Load()`                     |
 | Schema management     | `WithAutoSchema(true)` from structs         |
 
-## dgman Fork
+## dgman `predicate=` Fixes (Now Upstream)
 
-Fork `dolan-in/dgman` to `mlwelles/dgman`, clone to `../dgman`. Fixes two bugs
-where `predicate=` is ignored in mutation and query paths. The upstream master
-(`fb912ad`) is identical to `v2.2.0-preview2`; no fixes exist upstream.
+The `predicate=` fixes described below were originally developed in a fork
+(`mlwelles/dgman`) and have since been merged into mainline `dolan-in/dgman`
+v2.2.0. This project now uses the upstream release directly.
 
 ### Background: `predicate=` bugs
 
@@ -108,7 +106,7 @@ but reads back as zero (write uses predicate name, read expects json tag). The
 upstream modusgraph repo "works" by accident --- it consistently uses the wrong
 name on both sides.
 
-### Fork changes
+### Fixes (in dgman v2.2.0)
 
 Two fixes, both in dgman:
 
@@ -125,10 +123,9 @@ Two fixes, both in dgman:
    This ensures `release_date` in Dgraph's response maps to the
    `json:"releaseDate"` field.
 
-### Fork tests
+### Tests
 
-Tests live in the dgman fork repo. The predicate round-trip tests already exist
-in `modusGraph/predicate_test.go` and will be adapted:
+Tests for these fixes live in the dgman repo:
 
 - **Write round-trip via `MutateBasic`**: Insert a struct where `predicate=`
   differs from the `json` tag. Get it back, assert the field has the correct
@@ -141,35 +138,11 @@ in `modusGraph/predicate_test.go` and will be adapted:
   `ge(release_date, "1990-01-01")`, assert correct results. Confirms data was
   stored AND retrieved using the predicate name.
 
-## modusgraph Fork
+## modusgraph (Upstream)
 
-Fork `matthewmcneely/modusgraph` to `mlwelles/modusGraph`, clone to
-`../modusGraph`. Kept minimal so changes are easy to upstream.
-
-### Fork changes
-
-Two changes:
-
-1. **Use forked dgman** --- Update `go.mod` to point to `mlwelles/dgman` (via
-   `replace` directive during development). This pulls in the `predicate=` fixes
-   for both write and read paths. No code changes needed in modusgraph for
-   `predicate=` support --- the fixes are entirely in dgman.
-
-2. **`[]T` slice support** --- Make dgman's reflection handle value-type slices
-   (`[]Genre`) the same way it handles pointer slices (`[]*Genre`). Populate and
-   append by value instead of by pointer. No filtering or zero-value stripping;
-   validation is a separate concern handled by `WithValidator()`.
-
-### Fork tests
-
-- **`predicate=` end-to-end through modusgraph**: Insert, Update, Upsert, Get,
-  and Query using modusgraph's client API with structs where `predicate=` differs
-  from the `json` tag. These tests exercise the full stack (modusgraph →
-  dgman → Dgraph) on both `file://` and `dgraph://` backends. Tests already
-  exist in `modusGraph/predicate_test.go`.
-- **`[]T` slice round-trip**: Insert a struct with `[]Genre` (value-type slice),
-  query it back, assert the slice is populated correctly. Compare behavior with
-  `[]*Genre` to confirm parity.
+This project uses the mainline `matthewmcneely/modusgraph` v0.4.0 directly.
+The `predicate=` fixes are resolved via dgman v2.2.0 (a transitive dependency).
+The `[]T` value-type slice support was already present in modusgraph v0.4.0.
 
 ## modusGraphGen
 
@@ -506,9 +479,7 @@ module github.com/mlwelles/modusGraphMoviesProject
 
 go 1.26.0
 
-replace github.com/dolan-in/dgman/v2 => ../dgman
-replace github.com/matthewmcneely/modusgraph => ../modusGraph
-replace github.com/mlwelles/modusGraphGen => ../modusGraphGen
+replace github.com/mlwelles/modusGraphGen => github.com/mlwelles/modusGraphGen v1.0.0
 
 tool github.com/mlwelles/modusGraphGen
 
