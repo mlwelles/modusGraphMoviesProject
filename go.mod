@@ -2,10 +2,6 @@ module github.com/mlwelles/modusGraphMoviesProject
 
 go 1.26.0
 
-replace github.com/dolan-in/dgman/v2 => github.com/mlwelles/dgman/v2 v2.2.0-preview2.0.20260218050302-2f0c2a95c767
-
-replace github.com/matthewmcneely/modusgraph => github.com/mlwelles/modusGraph v0.4.1-0.20260218170250-d05c4d1b9701
-
 replace github.com/mlwelles/modusGraphGen => github.com/mlwelles/modusGraphGen v1.0.0
 
 tool github.com/mlwelles/modusGraphGen
@@ -43,7 +39,7 @@ require (
 	github.com/dgraph-io/simdjson-go v0.3.0 // indirect
 	github.com/dgryski/go-farm v0.0.0-20240924180020-3414d57e47da // indirect
 	github.com/dgryski/go-groupvarint v0.0.0-20230630160417-2bfb7969fb3c // indirect
-	github.com/dolan-in/dgman/v2 v2.2.0-preview2 // indirect
+	github.com/dolan-in/dgman/v2 v2.2.0 // indirect
 	github.com/dolan-in/reflectwalk v1.0.2-0.20210101124621-dc2073a29d71 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/eapache/go-resiliency v1.7.0 // indirect
