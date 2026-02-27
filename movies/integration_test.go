@@ -3,6 +3,7 @@ package movies_test
 import (
 	"context"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -726,4 +727,87 @@ func TestDirectorWithFilms(t *testing.T) {
 	for _, f := range director.Films {
 		t.Logf("  Film: %s (uid=%s)", f.Name, f.UID)
 	}
+}
+
+// --- Raw DQL query tests ---
+
+func TestQueryRaw(t *testing.T) {
+	skipIfNoDgraph(t)
+	c := newTestClient(t)
+	seedData(t, c)
+	ctx := context.Background()
+
+	// Query for films using raw DQL.
+	query := `{
+		q(func: type(Film), first: 5, orderasc: name) {
+			uid
+			name
+		}
+	}`
+	resp, err := c.QueryRaw(ctx, query, nil)
+	if err != nil {
+		t.Fatalf("QueryRaw: %v", err)
+	}
+
+	// Response should be valid JSON containing film data.
+	if len(resp) == 0 {
+		t.Fatal("QueryRaw returned empty response")
+	}
+
+	// Should contain at least one of our seeded film names.
+	body := string(resp)
+	if !strings.Contains(body, "The Matrix") && !strings.Contains(body, "Star Wars") {
+		t.Errorf("expected response to contain seeded film names, got: %s", body)
+	}
+	t.Logf("QueryRaw response: %s", body)
+}
+
+func TestQueryRawWithVars(t *testing.T) {
+	skipIfNoDgraph(t)
+	c := newTestClient(t)
+	seedData(t, c)
+	ctx := context.Background()
+
+	// Parameterized query using DQL variables.
+	query := `query films($term: string) {
+		q(func: alloftext(name, $term)) {
+			uid
+			name
+		}
+	}`
+	vars := map[string]string{"$term": "Matrix"}
+	resp, err := c.QueryRaw(ctx, query, vars)
+	if err != nil {
+		t.Fatalf("QueryRaw with vars: %v", err)
+	}
+
+	body := string(resp)
+	if !strings.Contains(body, "Matrix") {
+		t.Errorf("expected response to contain 'Matrix', got: %s", body)
+	}
+	t.Logf("QueryRaw with vars response: %s", body)
+}
+
+func TestQueryRawEmptyResult(t *testing.T) {
+	skipIfNoDgraph(t)
+	c := newTestClient(t)
+	ctx := context.Background()
+
+	// Query for something that definitely doesn't exist.
+	query := `{
+		q(func: eq(name, "zzzNonExistentFilm99999")) {
+			uid
+			name
+		}
+	}`
+	resp, err := c.QueryRaw(ctx, query, nil)
+	if err != nil {
+		t.Fatalf("QueryRaw: %v", err)
+	}
+
+	// Should return valid JSON even with no results.
+	if len(resp) == 0 {
+		t.Fatal("QueryRaw returned empty response for no-match query")
+	}
+	t.Logf("QueryRaw empty result response: %s", string(resp))
 }
