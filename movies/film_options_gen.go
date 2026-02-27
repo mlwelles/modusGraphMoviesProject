@@ -2,7 +2,9 @@
 
 package movies
 
-import "time"
+import (
+	"time"
+)
 
 // FilmOption is a functional option for configuring Film mutations.
 type FilmOption func(*Film)

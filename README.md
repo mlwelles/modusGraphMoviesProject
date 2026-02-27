@@ -2,8 +2,8 @@
 
 Reference project demonstrating struct-first code generation for
 [Dgraph](https://dgraph.io) using
-[modusgraph](https://github.com/matthewmcneely/modusgraph) and
-[modusGraphGen](https://github.com/mlwelles/modusGraphGen).
+[modusgraph](https://github.com/matthewmcneely/modusgraph) and its built-in
+`modusgraph-gen` code generator.
 
 Hand-written Go structs with `json` and `dgraph` tags are the single source of
 truth. Running `go generate` produces a fully typed client library, query
@@ -25,6 +25,10 @@ integration tests against it.
   command-line interface with subcommands per entity.
 - **Edge relationships**: Forward edges, reverse edges (`~predicate`), and
   `count` directives all inferred from struct tags.
+- **Raw DQL queries**: Execute arbitrary Dgraph Query Language queries via the
+  `QueryRaw` Go client method or the `query` CLI subcommand (argument or stdin).
+- **Dual connection modes**: Connect to a remote Dgraph cluster via gRPC
+  (`--addr`) or run an embedded Dgraph instance from a local directory (`--dir`).
 - **Integration tests**: Full CRUD, search, pagination, query builder, iterator,
   and reverse-edge tests against live Dgraph.
 
@@ -38,7 +42,7 @@ integration tests against it.
 ```sh
 # 1. Clone the project
 git clone https://github.com/mlwelles/modusGraphMoviesProject.git
-# Dependencies (modusgraph, dgman, modusGraphGen) are fetched
+# Dependencies (modusgraph, dgman) are fetched
 # automatically via go.mod
 
 # 2. Full setup: check deps, start Dgraph, load the 1M movie dataset
@@ -73,9 +77,8 @@ automatically via `go.mod`:
 
 | Repo | Role |
 |------|------|
-| [`matthewmcneely/modusgraph`](https://github.com/matthewmcneely/modusgraph) | Dgraph client library with struct-based schema management |
+| [`matthewmcneely/modusgraph`](https://github.com/matthewmcneely/modusgraph) | Dgraph client library with struct-based schema management and `modusgraph-gen` code generator |
 | [`dolan-in/dgman`](https://github.com/dolan-in/dgman) | Dgraph schema manager (transitive dep of modusgraph) |
-| [`mlwelles/modusGraphGen`](https://github.com/mlwelles/modusGraphGen) | Code generator: struct tags → typed client + Kong CLI |
 | [`mlwelles/modusGraphMoviesProject`](https://github.com/mlwelles/modusGraphMoviesProject) | **This repo**: reference project with structs, tests, and data loading |
 
 ```
@@ -91,6 +94,36 @@ modusGraphMoviesProject/   <-- you are here
   docker-compose.yml            Dgraph Zero + Alpha
   Makefile                      Build automation
 ```
+
+## Features
+
+### Standard modusGraph Features
+
+- **Typed CRUD**: `Get`, `Add`, `Update`, `Delete` per entity — fully typed,
+  no manual query construction needed
+- **Fulltext search**: `Search` method on entities with `index=fulltext` fields,
+  using Dgraph's stemming and stop-word removal
+- **Fluent query builders**: `Filter`, `OrderAsc`/`OrderDesc`, `First`, `Offset`,
+  `Exec`, and `ExecAndCount` for complex queries
+- **Auto-paging iterators**: Go 1.23+ `iter.Seq2` iterators (`SearchIter`,
+  `ListIter`) that transparently page through large result sets
+- **Functional options**: `First(n)`, `Offset(n)` pagination options shared
+  across all entity operations
+- **Auto-schema management**: `modusgraph.WithAutoSchema(true)` creates and
+  updates Dgraph schema from struct tags automatically
+- **Optional struct validation**: Integrates with `go-playground/validator` for
+  field-level validation on mutations
+
+### Query and Connection Features
+
+- **Raw DQL queries**: `QueryRaw(ctx, query, vars)` on the Go client executes
+  arbitrary Dgraph Query Language queries and returns raw JSON
+- **CLI query subcommand**: `movies query '<dql>'` or `echo '<dql>' | movies query`
+  for ad-hoc queries from the command line
+- **Dual connection modes**:
+  - **gRPC** (`--addr` / `DGRAPH_ADDR`): Connect to a remote Dgraph cluster
+  - **Embedded** (`--dir` / `DGRAPH_DIR`): Run Dgraph in-process from a local
+    directory — no external cluster required
 
 ## Struct Definitions
 
@@ -292,7 +325,7 @@ type Location struct {
 
 ## What Gets Generated
 
-Running `go generate ./movies` (or `make generate`) invokes modusGraphGen,
+Running `go generate ./movies` (or `make generate`) invokes `modusgraph-gen`,
 which reads the struct definitions and produces these files:
 
 | File | Contents |
@@ -345,6 +378,30 @@ client.Rating        // *RatingClient
 client.ContentRating // *ContentRatingClient
 client.Location      // *LocationClient
 client.Performance   // *PerformanceClient
+```
+
+### Raw DQL Queries (QueryRaw)
+
+For queries that go beyond the typed API, `QueryRaw` executes arbitrary DQL
+against the database and returns the raw JSON response:
+
+```go
+ctx := context.Background()
+
+// Simple query
+resp, err := client.QueryRaw(ctx,
+    `{ q(func: has(name), first: 5) { uid name } }`, nil)
+fmt.Println(string(resp))
+
+// Parameterized query with variables
+resp, err = client.QueryRaw(ctx,
+    `query search($term: string) {
+        q(func: alloftext(name, $term), first: 10) {
+            uid name
+        }
+    }`,
+    map[string]string{"$term": "Matrix"},
+)
 ```
 
 ### CRUD Operations
@@ -519,8 +576,10 @@ Usage: movies <command> [flags]
 
 Flags:
   --addr string    Dgraph gRPC address (default "dgraph://localhost:9080", env DGRAPH_ADDR)
+  --dir string     Local database directory (embedded mode, mutually exclusive with --addr)
 
 Commands:
+  query         Execute a raw DQL query
   film          Manage Film entities
   director      Manage Director entities
   actor         Manage Actor entities
@@ -531,6 +590,45 @@ Commands:
   location      Manage Location entities
   performance   Manage Performance entities
 ```
+
+### Connection Modes
+
+The CLI supports two mutually exclusive connection modes:
+
+- **gRPC (default)**: Connect to a running Dgraph cluster via `--addr`
+  ```sh
+  ./bin/movies --addr dgraph://localhost:9080 film search "Matrix"
+  ```
+- **Embedded**: Run Dgraph in-process from a local directory via `--dir`
+  ```sh
+  ./bin/movies --dir /tmp/movies-db film search "Matrix"
+  ```
+
+### Query Subcommand
+
+The `query` subcommand executes raw
+[DQL (Dgraph Query Language)](https://dgraph.io/docs/dql/) queries directly
+against the database. The query can be passed as a positional argument or piped
+via stdin.
+
+```sh
+# Pass query as argument
+./bin/movies query '{ q(func: has(name@en), first: 5) { uid name@en } }'
+
+# Pipe query via stdin
+echo '{ q(func: has(name@en), first: 5) { uid name@en } }' | ./bin/movies query
+
+# Use embedded mode
+./bin/movies --dir /tmp/movies-db query '{ q(func: type(Film), first: 3) { uid name } }'
+
+# Disable pretty-printing
+./bin/movies query --no-pretty '{ q(func: type(Genre)) { uid name } }'
+
+# Set a custom timeout
+./bin/movies query --timeout=60s '{ q(func: type(Film), first: 1000) { uid name } }'
+```
+
+### Entity Subcommands
 
 Each entity has the same subcommand pattern:
 
@@ -568,7 +666,7 @@ Output is JSON, making it easy to pipe to `jq`:
 make help          Show all targets and environment variables
 make setup         Full onboarding: check deps, start Dgraph, load 1M dataset
 make reset         Drop all data, reload from scratch
-make generate      Run modusGraphGen (regenerate client library + CLI)
+make generate      Run modusgraph-gen (regenerate client library + CLI)
 make build         Build the movies CLI binary to bin/movies
 make test          Run integration tests (self-healing: bootstraps Dgraph if needed)
 make check         Run go vet on all packages

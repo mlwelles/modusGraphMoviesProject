@@ -3,10 +3,15 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/matthewmcneely/modusgraph"
@@ -15,7 +20,10 @@ import (
 
 // CLI is the root command parsed by Kong.
 var CLI struct {
-	Addr          string           `help:"Dgraph gRPC address." default:"dgraph://localhost:9080" env:"DGRAPH_ADDR"`
+	Addr string `help:"Dgraph gRPC address." default:"dgraph://localhost:9080" env:"DGRAPH_ADDR"`
+	Dir  string `help:"Local database directory (embedded mode, mutually exclusive with --addr)." env:"DGRAPH_DIR"`
+
+	Query         QueryCmd         `cmd:"" help:"Execute a raw DQL query."`
 	Actor         ActorCmd         `cmd:"" help:"Manage Actor entities."`
 	ContentRating ContentRatingCmd `cmd:"" help:"Manage ContentRating entities."`
 	Country       CountryCmd       `cmd:"" help:"Manage Country entities."`
@@ -25,6 +33,57 @@ var CLI struct {
 	Location      LocationCmd      `cmd:"" help:"Manage Location entities."`
 	Performance   PerformanceCmd   `cmd:"" help:"Manage Performance entities."`
 	Rating        RatingCmd        `cmd:"" help:"Manage Rating entities."`
+}
+
+// QueryCmd executes a raw DQL query against the database.
+type QueryCmd struct {
+	Query   string        `arg:"" optional:"" help:"DQL query string (reads stdin if omitted)."`
+	Pretty  bool          `help:"Pretty-print JSON output." default:"true" negatable:""`
+	Timeout time.Duration `help:"Query timeout." default:"30s"`
+}
+
+func (c *QueryCmd) Run(client *movies.Client) error {
+	query := c.Query
+	if query == "" {
+		// Read from stdin.
+		reader := bufio.NewReader(os.Stdin)
+		var sb strings.Builder
+		for {
+			line, err := reader.ReadString('\n')
+			sb.WriteString(line)
+			if err != nil {
+				if err != io.EOF {
+					return fmt.Errorf("reading stdin: %w", err)
+				}
+				break
+			}
+		}
+		query = strings.TrimSpace(sb.String())
+	}
+
+	if query == "" {
+		return fmt.Errorf("empty query: provide a DQL query as an argument or via stdin")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.Timeout)
+	defer cancel()
+
+	resp, err := client.QueryRaw(ctx, query, nil)
+	if err != nil {
+		return err
+	}
+
+	if c.Pretty {
+		var data any
+		if err := json.Unmarshal(resp, &data); err != nil {
+			return fmt.Errorf("parsing response: %w", err)
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(data)
+	}
+	_, err = fmt.Println(string(resp))
+	return err
 }
 
 // ActorCmd groups subcommands for Actor.
@@ -671,13 +730,31 @@ func printJSON(v any) error {
 	return enc.Encode(v)
 }
 
+func connectString() (string, error) {
+	if CLI.Dir != "" {
+		if CLI.Addr != "dgraph://localhost:9080" {
+			return "", fmt.Errorf("--addr and --dir are mutually exclusive")
+		}
+		return fmt.Sprintf("file://%s", filepath.Clean(CLI.Dir)), nil
+	}
+	return CLI.Addr, nil
+}
+
 func main() {
 	ctx := kong.Parse(&CLI,
 		kong.Name("movies"),
 		kong.Description("CLI for the movies data model."),
 	)
 
-	client, err := movies.New(CLI.Addr, modusgraph.WithAutoSchema(true))
+	connStr, err := connectString()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(1)
+	}
+
+	client, err := movies.New(connStr,
+		modusgraph.WithAutoSchema(true),
+	)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "connect: %v\n", err)
 		os.Exit(1)

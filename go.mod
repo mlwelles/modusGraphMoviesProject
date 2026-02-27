@@ -2,9 +2,9 @@ module github.com/mlwelles/modusGraphMoviesProject
 
 go 1.26.0
 
-replace github.com/mlwelles/modusGraphGen => github.com/mlwelles/modusGraphGen v1.0.0
+replace github.com/matthewmcneely/modusgraph => github.com/mlwelles/modusGraph v0.4.1-0.20260227210523-ec7efd63ba41
 
-tool github.com/mlwelles/modusGraphGen
+tool github.com/matthewmcneely/modusgraph/cmd/modusgraph-gen
 
 require (
 	github.com/alecthomas/kong v1.14.0
@@ -95,7 +95,6 @@ require (
 	github.com/minio/minio-go/v7 v7.0.98 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.1-0.20231216201459-8508981c8b6c // indirect
-	github.com/mlwelles/modusGraphGen v0.0.0-00010101000000-000000000000 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect

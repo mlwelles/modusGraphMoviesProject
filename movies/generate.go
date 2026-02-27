@@ -1,3 +1,3 @@
 package movies
 
-//go:generate go run github.com/mlwelles/modusGraphGen
+//go:generate go run github.com/matthewmcneely/modusgraph/cmd/modusgraph-gen
